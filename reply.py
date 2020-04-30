@@ -2,26 +2,54 @@ import os
 from flask import Flask, request, redirect
 from twilio.twiml.messaging_response import MessagingResponse
 import requests
-from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.keys import Keys
 
 app = Flask(__name__)
 
-s = requests.Session()
+def create_driver():
+	CHROME_DRIVER_PATH = 'C:/Users/dulha/AppData/Local/chromedriver.exe'
+	capabilities = { 'chromeOptions':  { 'useAutomationExtension': False}}
+
+	options = Options()
+	options.headless = True
+	browser = webdriver.Chrome(executable_path = CHROME_DRIVER_PATH, desired_capabilities=capabilities, options = options)
+	browser.get("http://elbot-e.artificial-solutions.com/cgi-bin/elbot.cgi")
+	return browser
+
+browser = create_driver()
 
 @app.route("/sms", methods = ['POST'])
 def reply():
-	message_received = request.form.get('Body')
+
+	input_text = request.form.get('Body')
+
+	if (input_text.lower() == 'close'):
+		browser.quit()
+		browser = create_driver()
+		response = "Closed"
+
+	else:
+		input_box = browser.find_element_by_name("ENTRY")
+		input_box.send_keys(input_text)
+		input_box.send_keys(Keys.RETURN)
+		response_html = browser.find_element_by_xpath("/html/body/form/table/tbody/tr[3]/td[2]")
+		response_text = response_html.get_attribute('innerHTML')
+		response = response_text.replace(" <!-- Begin Response !--> ", "").replace(" <!-- End Response !-->", "")
+
 	reply = MessagingResponse()
-	response = s.post('http://elbot-e.artificial-solutions.com/cgi-bin/elbot.cgi', {'ENTRY':message_received})
-	soup = BeautifulSoup(response.content, 'html.parser')
-	input_table_row = soup.findAll('tr')[2]
-	input_html = input_table_row.findChildren("td")[1].getText()
-	reply.message(input_html)
+	reply.message(response)
 	return str(reply)
+		
 
 
 if __name__ == "__main__":
 	app.run(debug=True)
+
+
+
+
 
 
 
